@@ -1,6 +1,6 @@
 ﻿import { motion } from "framer-motion";
 
-export default function PlayerSidebar({ players, currentPlayerId, myWord, eliminatedPlayers = [], isMobile = false }) {
+export default function PlayerSidebar({ players, currentPlayerId, myWord, eliminatedPlayers = [], isMobile = false, roomId }) {
   if (isMobile) {
     return (
       <div className="text-white">
@@ -72,6 +72,11 @@ export default function PlayerSidebar({ players, currentPlayerId, myWord, elimin
         <h2 className="text-2xl font-bold text-purple-400">
           Joueurs
         </h2>
+        {roomId && (
+          <h2 className="text-2xl font-bold text-purple-400">
+            Room : {roomId}
+          </h2>
+        )}
         {myWord && (
           <div className="mt-4 p-3 bg-white/20 backdrop-blur rounded-lg border border-white/30">
             <p className="text-sm text-gray-200">Ton mot :</p>

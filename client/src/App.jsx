@@ -292,6 +292,7 @@ export default function App() {
               myWord={myWord}
               eliminatedPlayers={eliminatedPlayers}
               isMobile={true}
+              roomId={roomId}
             />
           </div>
           
@@ -356,6 +357,7 @@ export default function App() {
               myWord={myWord}
               eliminatedPlayers={eliminatedPlayers}
               isMobile={false}
+              roomId={roomId}
             />
           </div>
         </div>

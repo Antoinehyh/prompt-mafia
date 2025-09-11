@@ -12,6 +12,19 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
+// sanitize player data before broadcasting to clients
+function sanitizePlayers(players) {
+  return players.map(p => ({
+    id: p.id,
+    username: p.username,
+    isEliminated: p.isEliminated,
+    hasSubmittedPrompt: p.hasSubmittedPrompt,
+    hasVoted: p.hasVoted,
+    isHost: p.isHost,
+    isDisconnected: p.isDisconnected
+  }));
+}
+
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));
   
@@ -90,12 +103,13 @@ io.on("connection", (socket) => {
       
       
       if (games[roomId].status !== "WAITING") {
+        // Envoyer le mot uniquement au joueur reconnecté
         socket.emit("assign_roles", [{ id: socket.id, word: disconnectedPlayer.word }]);
         socket.emit("rejoin_game", {
           status: games[roomId].status,
           round: games[roomId].round,
-          eliminatedPlayers: games[roomId].eliminatedPlayers,
-          cards: games[roomId].cards,
+          eliminatedPlayers: sanitizePlayers(games[roomId].eliminatedPlayers),
+          cards: games[roomId].cards.map(c => ({ playerId: c.playerId, username: c.username, imageUrl: c.imageUrl })),
           votes: games[roomId].votes,
           turnOrder: games[roomId].turnOrder,
           currentTurn: games[roomId].currentTurn
@@ -103,7 +117,7 @@ io.on("connection", (socket) => {
       }
       
       console.log(`Émission update_players pour la room ${roomId}:`, games[roomId].players.map(p => ({name: p.username, isHost: p.isHost, isDisconnected: p.isDisconnected})));
-      io.to(roomId).emit("update_players", games[roomId].players);
+      io.to(roomId).emit("update_players", sanitizePlayers(games[roomId].players));
       
       
       if (games[roomId].status === "PROMPT") {
@@ -114,7 +128,7 @@ io.on("connection", (socket) => {
         });
       }
       
-      cb(disconnectedPlayer);
+      cb(sanitizePlayers([disconnectedPlayer])[0]);
       return;
     }
     
@@ -136,8 +150,8 @@ io.on("connection", (socket) => {
       socket.emit("rejoin_game", {
         status: games[roomId].status,
         round: games[roomId].round,
-        eliminatedPlayers: games[roomId].eliminatedPlayers,
-        cards: games[roomId].cards,
+        eliminatedPlayers: sanitizePlayers(games[roomId].eliminatedPlayers),
+        cards: games[roomId].cards.map(c => ({ playerId: c.playerId, username: c.username, imageUrl: c.imageUrl })),
         votes: games[roomId].votes,
         turnOrder: games[roomId].turnOrder,
         currentTurn: games[roomId].currentTurn
@@ -145,8 +159,8 @@ io.on("connection", (socket) => {
     }
     
     console.log(`Émission update_players pour la room ${roomId}:`, games[roomId].players.map(p => ({name: p.username, isHost: p.isHost})));
-    io.to(roomId).emit("update_players", games[roomId].players);
-    cb(player);
+    io.to(roomId).emit("update_players", sanitizePlayers(games[roomId].players));
+    cb(sanitizePlayers([player])[0]);
   });
 
   socket.on("start_game", ({ roomId }, cb) => {
@@ -167,9 +181,12 @@ io.on("connection", (socket) => {
     
     assignWordsAndRoles(games[roomId]);
     games[roomId].status = "PROMPT";
-    io.to(roomId).emit("assign_roles", games[roomId].players.map(p => ({
-      id: p.id, word: p.word
-    })));
+
+    // Envoyer le mot PRIVÉMENT à chaque joueur
+    games[roomId].players.forEach(p => {
+      io.to(p.id).emit("assign_roles", [{ id: p.id, word: p.word }]);
+    });
+
     io.to(roomId).emit("start_turn", {
       currentPlayerId: games[roomId].turnOrder[0],
       order: games[roomId].turnOrder
@@ -338,14 +355,14 @@ io.on("connection", (socket) => {
           prepareNewRound(games[roomId]);
           games[roomId].status = "PROMPT";
           
-          // Envoyer les nouveaux rôles avec les nouveaux mots
-          io.to(roomId).emit("assign_roles", games[roomId].players.map(p => ({
-            id: p.id, word: p.word
-          })));
+          // Envoyer le mot PRIVÉMENT à chaque joueur
+          games[roomId].players.forEach(p => {
+            io.to(p.id).emit("assign_roles", [{ id: p.id, word: p.word }]);
+          });
           
           io.to(roomId).emit("new_round", {
             round: games[roomId].round,
-            eliminatedPlayers: games[roomId].eliminatedPlayers
+            eliminatedPlayers: sanitizePlayers(games[roomId].eliminatedPlayers)
           });
           
           io.to(roomId).emit("start_turn", {
@@ -386,14 +403,14 @@ io.on("connection", (socket) => {
         prepareNewRound(game);
         game.status = "PROMPT";
         
-        // Envoyer les nouveaux rôles avec les nouveaux mots
-        io.to(roomId).emit("assign_roles", game.players.map(p => ({
-          id: p.id, word: p.word
-        })));
+        // Envoyer le mot PRIVÉMENT à chaque joueur
+        game.players.forEach(p => {
+          io.to(p.id).emit("assign_roles", [{ id: p.id, word: p.word }]);
+        });
         
         io.to(roomId).emit("new_round", {
           round: game.round,
-          eliminatedPlayers: game.eliminatedPlayers
+          eliminatedPlayers: sanitizePlayers(game.eliminatedPlayers)
         });
         
         io.to(roomId).emit("start_turn", {
@@ -421,7 +438,7 @@ io.on("connection", (socket) => {
         if (game.status !== "WAITING") {
           player.isDisconnected = true;
           // Garder le joueur dans la liste mais marquer comme déconnecté
-          io.to(game.roomId).emit("update_players", game.players);
+          io.to(game.roomId).emit("update_players", sanitizePlayers(game.players));
           return;
         }
       }
@@ -443,7 +460,7 @@ io.on("connection", (socket) => {
         console.log(`Nouveau hôte pour la room ${game.roomId}: ${newHost.username}`);
         
         // Notifier tous les joueurs du changement d'hôte
-        io.to(game.roomId).emit("update_players", game.players);
+        io.to(game.roomId).emit("update_players", sanitizePlayers(game.players));
       } else if (game.players.length === 0) {
         // Si plus de joueurs connectés, garder la room pendant 5 minutes
         setTimeout(() => {
@@ -453,7 +470,7 @@ io.on("connection", (socket) => {
           }
         }, 300000);
       } else {
-        io.to(game.roomId).emit("update_players", game.players);
+        io.to(game.roomId).emit("update_players", sanitizePlayers(game.players));
       }
     });
   });

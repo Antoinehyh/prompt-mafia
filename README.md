@@ -1,4 +1,4 @@
-# Prompt Mafia (Subterfuge(nouveau nom ^^)) 
+# Prompt Mafia (Subterfuge) 
 
 ## Installation et Lancement
 

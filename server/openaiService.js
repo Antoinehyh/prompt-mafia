@@ -25,13 +25,14 @@ async function generateImage(prompt) {
     console.log('Génération d\'image avec DALL-E pour le prompt:', prompt);
     
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model: "gpt-image-1",
       prompt: prompt,
       n: 1,
-      size: "1024x1024"
+      size: "1024x1024",
+      quality: "low"
     });
 
-    const imageUrl = response.data[0].url;
+    const imageUrl = `data:image/png;base64,${response.data[0].b64_json}`;
     console.log('Image générée avec succès:', imageUrl);
     return imageUrl;
     
@@ -60,7 +61,6 @@ async function generateImage(prompt) {
  * @returns {Promise<string>}
  */
 async function generateImageWithDelay(prompt) {
-  await new Promise(resolve => setTimeout(resolve, 1000));
   return await generateImage(prompt);
 }
 
